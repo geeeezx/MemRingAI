@@ -1,0 +1,1 @@
+# MemRingAI - FastAPI Transcription Service 
