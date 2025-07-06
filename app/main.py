@@ -10,6 +10,7 @@ from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
 
 from app.api.transcription import router as transcription_router
+from app.api.intent import router as intent_router
 from app.config import get_settings
 
 # Load environment variables
@@ -85,12 +86,16 @@ async def root():
     return {
         "service": "MemRingAI Transcription Service",
         "version": "0.1.0",
-        "description": "FastAPI service for transcription using OpenAI Whisper API",
+        "description": "FastAPI service for transcription using OpenAI Whisper API with intent recognition",
         "endpoints": {
-            "health": "/health",
-            "transcribe": "/transcribe",
-            "transcribe_url": "/transcribe/url",
-            "supported_formats": "/supported-formats",
+            "health": "/api/v1/health",
+            "transcribe": "/api/v1/transcribe",
+            "transcribe_url": "/api/v1/transcribe/url",
+            "supported_formats": "/api/v1/supported-formats",
+            "intent_analyze": "/api/v1/intent/analyze",
+            "intent_batch": "/api/v1/intent/analyze/batch",
+            "intent_config": "/api/v1/intent/config",
+            "intent_health": "/api/v1/intent/health",
             "docs": "/docs"
         }
     }
@@ -98,6 +103,7 @@ async def root():
 
 # Include routers
 app.include_router(transcription_router, prefix="/api/v1", tags=["transcription"])
+app.include_router(intent_router, prefix="/api/v1/intent", tags=["intent"])
 
 
 if __name__ == "__main__":
