@@ -22,7 +22,7 @@ class VolcengineConfig(BaseModel):
     """Volcengine API configuration."""
     app_id: str
     access_token: str
-    resource_id: str = "volc.bigasr.auc_turbo"
+    resource_id: str
     base_url: str = "https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash"
 
 

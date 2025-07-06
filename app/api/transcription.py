@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-def get_asr_service_dependency(provider: ASRProvider = ASRProvider.AUTO):
+def get_asr_service_dependency(provider: ASRProvider = ASRProvider.OPENAI):
     """Dependency to get ASR service instance."""
     return get_asr_service(provider)
 
@@ -57,7 +57,7 @@ async def transcribe_audio(
     prompt: Optional[str] = Form(None, description="Optional prompt to guide transcription"),
     response_format: Optional[str] = Form("verbose_json", description="Response format"),
     temperature: Optional[float] = Form(0.0, description="Temperature for sampling"),
-    provider: Optional[str] = Form("auto", description="ASR provider (openai, volcengine, auto)"),
+    provider: Optional[str] = Form("openai", description="ASR provider (openai, volcengine, auto)"),
     asr_service = Depends(get_asr_service_dependency),
     file_service: FileService = Depends(get_file_service)
 ) -> TranscriptionResponse:
