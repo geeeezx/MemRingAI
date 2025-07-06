@@ -13,7 +13,7 @@ from app.models import (
     ErrorResponse,
     HealthResponse
 )
-from app.services.openai_service import OpenAIService
+from app.services.ASR import get_asr_service, ASRProvider
 from app.services.file_service import FileService
 
 logger = logging.getLogger(__name__)
@@ -21,9 +21,9 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-def get_openai_service() -> OpenAIService:
-    """Dependency to get OpenAI service instance."""
-    return OpenAIService()
+def get_asr_service_dependency(provider: ASRProvider = ASRProvider.AUTO):
+    """Dependency to get ASR service instance."""
+    return get_asr_service(provider)
 
 
 def get_file_service() -> FileService:
@@ -33,17 +33,17 @@ def get_file_service() -> FileService:
 
 @router.get("/health", response_model=HealthResponse)
 async def health_check(
-    openai_service: OpenAIService = Depends(get_openai_service)
+    asr_service = Depends(get_asr_service_dependency)
 ) -> HealthResponse:
     """
-    Health check endpoint to verify service status and OpenAI configuration.
+    Health check endpoint to verify service status and ASR configuration.
     
     Returns:
-        HealthResponse with service status and OpenAI configuration status
+        HealthResponse with service status and ASR configuration status
     """
     try:
-        openai_configured = await openai_service.validate_api_key()
-        return HealthResponse(openai_configured=openai_configured)
+        asr_configured = await asr_service.validate_api_key()
+        return HealthResponse(openai_configured=asr_configured)
     except Exception as e:
         logger.error(f"Health check failed: {str(e)}")
         return HealthResponse(openai_configured=False)
@@ -52,25 +52,27 @@ async def health_check(
 @router.post("/transcribe", response_model=TranscriptionResponse)
 async def transcribe_audio(
     file: UploadFile = File(..., description="Audio file to transcribe"),
-    model: Optional[str] = Form("whisper-1", description="Whisper model to use"),
+    model: Optional[str] = Form("whisper-1", description="Model to use"),
     language: Optional[str] = Form(None, description="Language code (e.g., 'en', 'es')"),
     prompt: Optional[str] = Form(None, description="Optional prompt to guide transcription"),
     response_format: Optional[str] = Form("verbose_json", description="Response format"),
     temperature: Optional[float] = Form(0.0, description="Temperature for sampling"),
-    openai_service: OpenAIService = Depends(get_openai_service),
+    provider: Optional[str] = Form("auto", description="ASR provider (openai, volcengine, auto)"),
+    asr_service = Depends(get_asr_service_dependency),
     file_service: FileService = Depends(get_file_service)
 ) -> TranscriptionResponse:
     """
-    Transcribe an uploaded audio file using OpenAI Whisper API.
+    Transcribe an uploaded audio file using ASR API.
     
     Args:
         file: Audio file to transcribe
-        model: Whisper model to use
+        model: Model to use
         language: Language code for transcription
         prompt: Optional prompt to guide transcription
         response_format: Response format (verbose_json, json, text, srt, vtt)
         temperature: Temperature for sampling (0.0 to 1.0)
-        openai_service: OpenAI service instance
+        provider: ASR provider to use (openai, volcengine, auto)
+        asr_service: ASR service instance
         file_service: File service instance
         
     Returns:
@@ -94,9 +96,20 @@ async def transcribe_audio(
             temperature=temperature
         )
         
+        # Get ASR service based on provider
+        if provider != "auto":
+            try:
+                asr_provider = ASRProvider(provider)
+                asr_service = get_asr_service(asr_provider)
+            except ValueError:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid ASR provider: {provider}"
+                )
+        
         # Perform transcription
-        logger.info(f"Starting transcription for file: {file.filename}")
-        result = await openai_service.transcribe_audio(temp_file_path, request)
+        logger.info(f"Starting transcription for file: {file.filename} using {provider}")
+        result = await asr_service.transcribe_audio(temp_file_path, request)
         
         logger.info(f"Transcription completed successfully for file: {file.filename}")
         return result
@@ -119,25 +132,27 @@ async def transcribe_audio(
 @router.post("/transcribe/url", response_model=TranscriptionResponse)
 async def transcribe_from_url(
     url: str = Form(..., description="URL of the audio file to transcribe"),
-    model: Optional[str] = Form("whisper-1", description="Whisper model to use"),
+    model: Optional[str] = Form("whisper-1", description="Model to use"),
     language: Optional[str] = Form(None, description="Language code (e.g., 'en', 'es')"),
     prompt: Optional[str] = Form(None, description="Optional prompt to guide transcription"),
     response_format: Optional[str] = Form("verbose_json", description="Response format"),
     temperature: Optional[float] = Form(0.0, description="Temperature for sampling"),
-    openai_service: OpenAIService = Depends(get_openai_service),
+    provider: Optional[str] = Form("auto", description="ASR provider (openai, volcengine, auto)"),
+    asr_service = Depends(get_asr_service_dependency),
     file_service: FileService = Depends(get_file_service)
 ) -> TranscriptionResponse:
     """
-    Transcribe an audio file from URL using OpenAI Whisper API.
+    Transcribe an audio file from URL using ASR API.
     
     Args:
         url: URL of the audio file to transcribe
-        model: Whisper model to use
+        model: Model to use
         language: Language code for transcription
         prompt: Optional prompt to guide transcription
         response_format: Response format (verbose_json, json, text, srt, vtt)
         temperature: Temperature for sampling (0.0 to 1.0)
-        openai_service: OpenAI service instance
+        provider: ASR provider to use (openai, volcengine, auto)
+        asr_service: ASR service instance
         file_service: File service instance
         
     Returns:
@@ -173,9 +188,20 @@ async def transcribe_from_url(
             temperature=temperature
         )
         
+        # Get ASR service based on provider
+        if provider != "auto":
+            try:
+                asr_provider = ASRProvider(provider)
+                asr_service = get_asr_service(asr_provider)
+            except ValueError:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid ASR provider: {provider}"
+                )
+        
         # Perform transcription
-        logger.info(f"Starting transcription for URL: {url}")
-        result = await openai_service.transcribe_audio(temp_file_path, request)
+        logger.info(f"Starting transcription for URL: {url} using {provider}")
+        result = await asr_service.transcribe_audio(temp_file_path, request)
         
         logger.info(f"Transcription completed successfully for URL: {url}")
         return result
@@ -214,4 +240,40 @@ async def get_supported_formats() -> dict:
         "max_file_size_mb": settings.max_file_size / (1024 * 1024),
         "default_model": settings.default_model,
         "default_response_format": settings.default_response_format
+    }
+
+
+@router.get("/providers")
+async def get_available_providers() -> dict:
+    """
+    Get available ASR providers and their status.
+    
+    Returns:
+        Dictionary with available providers and their configuration status
+    """
+    from app.services.ASR import get_available_providers as get_providers
+    
+    providers = get_providers()
+    provider_info = {}
+    
+    for provider in providers:
+        try:
+            service = get_asr_service(provider)
+            is_valid = await service.validate_api_key()
+            provider_info[provider.value] = {
+                "available": True,
+                "configured": True,
+                "valid": is_valid
+            }
+        except Exception as e:
+            provider_info[provider.value] = {
+                "available": True,
+                "configured": False,
+                "valid": False,
+                "error": str(e)
+            }
+    
+    return {
+        "providers": provider_info,
+        "default": "auto"
     } 

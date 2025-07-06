@@ -7,6 +7,8 @@ A fast, async FastAPI service for audio transcription using OpenAI's Whisper API
 - 🚀 **Fast & Async**: Built with FastAPI for high-performance async processing
 - 🎵 **Multiple Formats**: Supports MP3, MP4, MPEG, MPGA, M4A, WAV, WebM
 - 🌐 **URL Support**: Transcribe audio files from URLs
+- 🤖 **Multiple ASR Providers**: Support for OpenAI Whisper and Volcengine (DouBao) ASR
+- 🔄 **Provider Switching**: Seamlessly switch between different ASR providers
 - 📊 **Detailed Output**: Get timestamps, segments, and confidence scores
 - 🔧 **Configurable**: Customizable model, language, and response formats
 - 🛡️ **Secure**: File validation, size limits, and proper error handling
@@ -17,7 +19,8 @@ A fast, async FastAPI service for audio transcription using OpenAI's Whisper API
 ### Prerequisites
 
 - Python 3.10+
-- OpenAI API key
+- OpenAI API key (for OpenAI Whisper)
+- Volcengine (DouBao) credentials (for Volcengine ASR)
 
 ### Installation
 
@@ -63,6 +66,7 @@ language: en (optional)
 prompt: "Optional context prompt" (optional)
 response_format: verbose_json (optional)
 temperature: 0.0 (optional)
+provider: auto (optional) - ASR provider (openai, volcengine, auto)
 ```
 
 ### Transcribe from URL
@@ -83,6 +87,11 @@ temperature: 0.0 (optional)
 GET /api/v1/supported-formats
 ```
 
+### Get Available Providers
+```http
+GET /api/v1/providers
+```
+
 ## Usage Examples
 
 ### Using curl
@@ -93,7 +102,8 @@ curl -X POST "http://localhost:8000/api/v1/transcribe" \
   -H "Content-Type: multipart/form-data" \
   -F "file=@audio.mp3" \
   -F "language=en" \
-  -F "response_format=verbose_json"
+  -F "response_format=verbose_json" \
+  -F "provider=openai"
 ```
 
 **Transcribe from URL:**
@@ -142,8 +152,11 @@ print(result['text'])
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `OPENAI_API_KEY` | Your OpenAI API key | Required |
+| `OPENAI_API_KEY` | Your OpenAI API key | Required for OpenAI |
 | `OPENAI_ORGANIZATION` | OpenAI organization ID | Optional |
+| `VOLCENGINE_APP_ID` | Your Volcengine App ID | Required for Volcengine |
+| `VOLCENGINE_ACCESS_TOKEN` | Your Volcengine Access Token | Required for Volcengine |
+| `VOLCENGINE_RESOURCE_ID` | Volcengine Resource ID | Optional (default: volc.bigasr.auc_turbo) |
 | `HOST` | Server host | `0.0.0.0` |
 | `PORT` | Server port | `8000` |
 | `DEBUG` | Debug mode | `false` |
