@@ -14,6 +14,11 @@ class Settings(BaseSettings):
     openai_api_key: str = Field(..., env="OPENAI_API_KEY")
     openai_organization: Optional[str] = Field(None, env="OPENAI_ORGANIZATION")
     
+    # Volcengine (DouBao) Configuration
+    volcengine_app_id: Optional[str] = Field(None, env="VOLCENGINE_APP_ID")
+    volcengine_access_token: Optional[str] = Field(None, env="VOLCENGINE_ACCESS_TOKEN")
+    volcengine_resource_id: str = Field("volc.bigasr.auc_turbo", env="VOLCENGINE_RESOURCE_ID")
+    
     # Server Configuration
     host: str = Field("0.0.0.0", env="HOST")
     port: int = Field(8000, env="PORT")
