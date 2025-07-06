@@ -3,11 +3,18 @@
 import os
 from typing import Optional
 
-from pydantic import BaseSettings, Field
+from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
+    
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        case_sensitive=False,
+        extra="ignore"
+    )
     
     # OpenAI Configuration
     openai_api_key: str = Field(..., env="OPENAI_API_KEY")
@@ -32,10 +39,6 @@ class Settings(BaseSettings):
     
     # Temporary file storage
     temp_dir: str = Field("./temp", env="TEMP_DIR")
-    
-    class Config:
-        env_file = ".env"
-        case_sensitive = False
 
 
 # Global settings instance
