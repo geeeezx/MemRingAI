@@ -3,6 +3,7 @@ import os
 from typing import Dict, Any, Optional
 from pydantic import BaseModel
 import json
+from ..config import get_settings
 
 
 class IdeaReport(BaseModel):
@@ -24,7 +25,12 @@ class ReportAgentService:
         """Initialize the report agent service"""
         try:
             from openai import OpenAI
-            self.client = OpenAI(api_key=api_key or os.getenv("OPENAI_API_KEY"))
+            # Use the project's existing settings configuration
+            settings = get_settings()
+            self.client = OpenAI(
+                api_key=api_key or settings.openai_api_key,
+                organization=settings.openai_organization
+            )
         except ImportError:
             raise ImportError("OpenAI package not found. Please install it with: pip install openai")
     
