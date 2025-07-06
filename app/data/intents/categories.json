@@ -1,0 +1,167 @@
+{
+  "intent_categories": {
+    "question": {
+      "description": "User is asking a question seeking information or clarification",
+      "examples": [
+        "What time is it?",
+        "How do I reset my password?",
+        "Why is the service not working?",
+        "When will the feature be available?",
+        "Where can I find the documentation?"
+      ],
+      "keywords": ["what", "how", "why", "when", "where", "who", "?"],
+      "patterns": [
+        "what is",
+        "how to",
+        "why does",
+        "when will",
+        "where can"
+      ]
+    },
+    "request": {
+      "description": "User is making a request for action or service",
+      "examples": [
+        "Please update my profile",
+        "Can you help me with this?",
+        "I need to change my subscription",
+        "Could you send me the invoice?",
+        "I want to upgrade my plan"
+      ],
+      "keywords": ["please", "can you", "could you", "i need", "i want", "help me"],
+      "patterns": [
+        "please",
+        "can you",
+        "could you",
+        "i need",
+        "i want",
+        "help me"
+      ]
+    },
+    "complaint": {
+      "description": "User is expressing dissatisfaction or reporting a problem",
+      "examples": [
+        "This is not working properly",
+        "I'm having issues with the service",
+        "The app crashed again",
+        "This is terrible quality",
+        "I'm not happy with the product"
+      ],
+      "keywords": ["problem", "issue", "wrong", "error", "bad", "terrible", "not working", "crashed", "broken"],
+      "patterns": [
+        "not working",
+        "having issues",
+        "crashed",
+        "terrible",
+        "not happy"
+      ]
+    },
+    "compliment": {
+      "description": "User is expressing satisfaction or praise",
+      "examples": [
+        "This is excellent work",
+        "Great job on the new feature",
+        "I love the new design",
+        "Amazing customer service",
+        "The app works perfectly"
+      ],
+      "keywords": ["good", "great", "excellent", "wonderful", "amazing", "love", "perfect", "awesome"],
+      "patterns": [
+        "excellent",
+        "great job",
+        "love the",
+        "amazing",
+        "works perfectly"
+      ]
+    },
+    "booking": {
+      "description": "User wants to make a reservation or schedule something",
+      "examples": [
+        "I want to book an appointment",
+        "Can I schedule a meeting?",
+        "Reserve a table for two",
+        "Book a flight to New York",
+        "I need to make a reservation"
+      ],
+      "keywords": ["book", "reserve", "appointment", "schedule", "reservation", "meeting"],
+      "patterns": [
+        "book",
+        "reserve",
+        "schedule",
+        "make a reservation",
+        "book an appointment"
+      ]
+    },
+    "cancellation": {
+      "description": "User wants to cancel or remove something",
+      "examples": [
+        "Cancel my subscription",
+        "I want to delete my account",
+        "Remove me from the mailing list",
+        "Stop sending me notifications",
+        "Cancel my order"
+      ],
+      "keywords": ["cancel", "remove", "delete", "stop", "unsubscribe", "end"],
+      "patterns": [
+        "cancel",
+        "delete",
+        "remove",
+        "stop",
+        "unsubscribe"
+      ]
+    },
+    "information": {
+      "description": "User is seeking general information or explanation",
+      "examples": [
+        "Tell me about your services",
+        "What are the pricing options?",
+        "Explain how this works",
+        "Give me information about the product",
+        "I need more details"
+      ],
+      "keywords": ["info", "information", "tell me", "explain", "details", "about"],
+      "patterns": [
+        "tell me about",
+        "information about",
+        "explain",
+        "details about",
+        "more info"
+      ]
+    },
+    "support": {
+      "description": "User needs help or technical support",
+      "examples": [
+        "I need help with my account",
+        "Can you assist me?",
+        "Technical support needed",
+        "Help me troubleshoot this",
+        "I'm having trouble with the app"
+      ],
+      "keywords": ["help", "support", "assist", "guide", "troubleshoot", "technical"],
+      "patterns": [
+        "need help",
+        "technical support",
+        "assist me",
+        "help me",
+        "having trouble"
+      ]
+    },
+    "other": {
+      "description": "Intent that doesn't fit into predefined categories",
+      "examples": [
+        "Random text",
+        "Unclear intent",
+        "Mixed topics",
+        "Ambiguous message"
+      ],
+      "keywords": [],
+      "patterns": []
+    }
+  },
+  "metadata": {
+    "version": "1.0.0",
+    "last_updated": "2024-01-01",
+    "total_categories": 9,
+    "default_category": "other",
+    "confidence_threshold": 0.5
+  }
+} 

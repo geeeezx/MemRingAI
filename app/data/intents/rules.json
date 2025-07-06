@@ -1,0 +1,191 @@
+{
+  "intent_rules": {
+    "question": {
+      "priority": 1,
+      "conditions": [
+        {
+          "type": "contains_any",
+          "values": ["what", "how", "why", "when", "where", "who"],
+          "weight": 0.3
+        },
+        {
+          "type": "ends_with",
+          "values": ["?"],
+          "weight": 0.4
+        },
+        {
+          "type": "starts_with",
+          "values": ["what is", "how to", "why does", "when will", "where can"],
+          "weight": 0.5
+        }
+      ],
+      "minimum_confidence": 0.3
+    },
+    "request": {
+      "priority": 2,
+      "conditions": [
+        {
+          "type": "contains_any",
+          "values": ["please", "can you", "could you", "i need", "i want"],
+          "weight": 0.4
+        },
+        {
+          "type": "starts_with",
+          "values": ["please", "can you", "could you", "i need", "i want"],
+          "weight": 0.5
+        },
+        {
+          "type": "contains_phrase",
+          "values": ["help me", "assist me", "do me a favor"],
+          "weight": 0.4
+        }
+      ],
+      "minimum_confidence": 0.4
+    },
+    "complaint": {
+      "priority": 3,
+      "conditions": [
+        {
+          "type": "contains_any",
+          "values": ["problem", "issue", "wrong", "error", "bad", "terrible", "awful", "horrible"],
+          "weight": 0.4
+        },
+        {
+          "type": "contains_phrase",
+          "values": ["not working", "doesn't work", "broken", "crashed", "failed"],
+          "weight": 0.5
+        },
+        {
+          "type": "contains_any",
+          "values": ["hate", "angry", "frustrated", "disappointed"],
+          "weight": 0.3
+        }
+      ],
+      "minimum_confidence": 0.4
+    },
+    "compliment": {
+      "priority": 4,
+      "conditions": [
+        {
+          "type": "contains_any",
+          "values": ["good", "great", "excellent", "wonderful", "amazing", "awesome", "fantastic"],
+          "weight": 0.4
+        },
+        {
+          "type": "contains_phrase",
+          "values": ["well done", "great job", "love it", "works perfectly"],
+          "weight": 0.5
+        },
+        {
+          "type": "contains_any",
+          "values": ["perfect", "brilliant", "outstanding", "impressed"],
+          "weight": 0.3
+        }
+      ],
+      "minimum_confidence": 0.4
+    },
+    "booking": {
+      "priority": 5,
+      "conditions": [
+        {
+          "type": "contains_any",
+          "values": ["book", "reserve", "schedule", "appointment"],
+          "weight": 0.5
+        },
+        {
+          "type": "contains_phrase",
+          "values": ["make a reservation", "book an appointment", "schedule a meeting"],
+          "weight": 0.6
+        },
+        {
+          "type": "contains_any",
+          "values": ["reservation", "booking", "appointment"],
+          "weight": 0.4
+        }
+      ],
+      "minimum_confidence": 0.4
+    },
+    "cancellation": {
+      "priority": 6,
+      "conditions": [
+        {
+          "type": "contains_any",
+          "values": ["cancel", "remove", "delete", "stop", "unsubscribe"],
+          "weight": 0.5
+        },
+        {
+          "type": "contains_phrase",
+          "values": ["cancel my", "delete my", "remove me", "stop sending"],
+          "weight": 0.6
+        },
+        {
+          "type": "contains_any",
+          "values": ["end", "terminate", "quit"],
+          "weight": 0.3
+        }
+      ],
+      "minimum_confidence": 0.4
+    },
+    "information": {
+      "priority": 7,
+      "conditions": [
+        {
+          "type": "contains_any",
+          "values": ["info", "information", "tell me", "explain", "details"],
+          "weight": 0.4
+        },
+        {
+          "type": "contains_phrase",
+          "values": ["tell me about", "information about", "more details", "explain how"],
+          "weight": 0.5
+        },
+        {
+          "type": "contains_any",
+          "values": ["about", "regarding", "concerning"],
+          "weight": 0.2
+        }
+      ],
+      "minimum_confidence": 0.3
+    },
+    "support": {
+      "priority": 8,
+      "conditions": [
+        {
+          "type": "contains_any",
+          "values": ["help", "support", "assist", "guide", "troubleshoot"],
+          "weight": 0.4
+        },
+        {
+          "type": "contains_phrase",
+          "values": ["need help", "technical support", "help me", "having trouble"],
+          "weight": 0.5
+        },
+        {
+          "type": "contains_any",
+          "values": ["technical", "issue", "problem"],
+          "weight": 0.3
+        }
+      ],
+      "minimum_confidence": 0.4
+    }
+  },
+  "rule_engine_config": {
+    "version": "1.0.0",
+    "last_updated": "2024-01-01",
+    "default_intent": "other",
+    "confidence_calculation": "weighted_sum",
+    "normalization": "min_max",
+    "case_sensitive": false,
+    "stemming_enabled": false,
+    "stop_words_removal": false
+  },
+  "condition_types": {
+    "contains_any": "Check if text contains any of the specified values",
+    "contains_phrase": "Check if text contains specific phrases",
+    "starts_with": "Check if text starts with any of the specified values",
+    "ends_with": "Check if text ends with any of the specified values",
+    "regex_match": "Check if text matches regular expression pattern",
+    "length_range": "Check if text length is within specified range",
+    "word_count": "Check if word count meets criteria"
+  }
+} 
