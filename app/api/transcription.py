@@ -1,6 +1,7 @@
 """Transcription API endpoints."""
 
 import logging
+import time
 from typing import Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
@@ -15,6 +16,7 @@ from app.models import (
 )
 from app.services.ASR import get_asr_service, ASRProvider
 from app.services.file_service import FileService
+from app.services.vad import vad_service
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +60,7 @@ async def transcribe_audio(
     response_format: Optional[str] = Form("verbose_json", description="Response format"),
     temperature: Optional[float] = Form(0.0, description="Temperature for sampling"),
     provider: Optional[str] = Form("openai", description="ASR provider (openai, volcengine, auto)"),
+    enable_vad: Optional[bool] = Form(True, description="Enable Voice Activity Detection"),
     asr_service = Depends(get_asr_service_dependency),
     file_service: FileService = Depends(get_file_service)
 ) -> TranscriptionResponse:
@@ -82,12 +85,48 @@ async def transcribe_audio(
         HTTPException: If transcription fails or file is invalid
     """
     temp_file_path = None
+    vad_result = None
+    timing_info = {}
     
     try:
-        # Validate and save uploaded file
-        temp_file_path = await file_service.save_uploaded_file(file)
+        # Start timing
+        start_time = time.time()
         
-        # Create transcription request
+        # Step 1: Validate and save uploaded file
+        step_start = time.time()
+        temp_file_path = await file_service.save_uploaded_file(file)
+        file_save_time = time.time() - step_start
+        timing_info['file_save'] = file_save_time
+        logger.info(f"File save completed in {file_save_time:.2f}s")
+        
+        # Step 2: Process with VAD if enabled
+        vad_time = 0
+        if enable_vad:
+            try:
+                step_start = time.time()
+                logger.info(f"Processing audio with VAD: {file.filename}")
+                
+                # VAD acceleration is now configured via environment variables
+                logger.info("VAD processing with acceleration settings from environment variables")
+                
+                vad_result = vad_service.process_audio_file(temp_file_path)
+                vad_time = time.time() - step_start
+                timing_info['vad_processing'] = vad_time
+                logger.info(f"VAD processing completed in {vad_time:.2f}s: {vad_result['segment_count']} segments, "
+                           f"speech ratio: {vad_result['speech_ratio']:.2%}")
+                
+                # Use the converted WAV file for transcription if conversion was needed
+                if vad_result['converted']:
+                    temp_file_path = vad_result['wav_file']
+                    
+            except Exception as e:
+                vad_time = time.time() - step_start
+                timing_info['vad_processing'] = vad_time
+                logger.warning(f"VAD processing failed after {vad_time:.2f}s, continuing without VAD: {str(e)}")
+                vad_result = None
+        
+        # Step 3: Create transcription request
+        step_start = time.time()
         request = TranscriptionRequest(
             model=model,
             language=language,
@@ -95,8 +134,11 @@ async def transcribe_audio(
             response_format=response_format,
             temperature=temperature
         )
+        request_time = time.time() - step_start
+        timing_info['request_preparation'] = request_time
         
-        # Get ASR service based on provider
+        # Step 4: Get ASR service based on provider
+        step_start = time.time()
         if provider != "auto":
             try:
                 asr_provider = ASRProvider(provider)
@@ -106,12 +148,40 @@ async def transcribe_audio(
                     status_code=400,
                     detail=f"Invalid ASR provider: {provider}"
                 )
+        service_setup_time = time.time() - step_start
+        timing_info['service_setup'] = service_setup_time
         
-        # Perform transcription
+        # Step 5: Perform transcription
+        step_start = time.time()
         logger.info(f"Starting transcription for file: {file.filename} using {provider}")
         result = await asr_service.transcribe_audio(temp_file_path, request)
+        transcription_time = time.time() - step_start
+        timing_info['transcription'] = transcription_time
+        logger.info(f"Transcription completed in {transcription_time:.2f}s")
+        
+        # Step 6: Add VAD information to response if available
+        step_start = time.time()
+        if vad_result:
+            result.vad_info = {
+                'segment_count': vad_result['segment_count'],
+                'speech_ratio': vad_result['speech_ratio'],
+                'total_speech_duration': vad_result['total_speech_duration'],
+                'speech_segments': vad_result['speech_segments'],
+                'timing_info': vad_result.get('timing_info', {}),
+                'acceleration_info': vad_result.get('acceleration_info')
+            }
+        
+        # Add timing information to response
+        total_time = time.time() - start_time
+        timing_info['total_time'] = total_time
+        result.timing_info = timing_info
+        
+        response_prep_time = time.time() - step_start
+        timing_info['response_preparation'] = response_prep_time
         
         logger.info(f"Transcription completed successfully for file: {file.filename}")
+        logger.info(f"Total processing time: {total_time:.2f}s")
+        logger.info(f"Timing breakdown: {timing_info}")
         return result
         
     except HTTPException:
@@ -124,9 +194,16 @@ async def transcribe_audio(
             detail=f"Transcription failed: {str(e)}"
         )
     finally:
-        # Clean up temporary file
+        # Clean up temporary files
         if temp_file_path:
             await file_service.cleanup_temp_file(temp_file_path)
+        
+        # Clean up converted VAD files if they exist
+        if vad_result and vad_result.get('converted'):
+            try:
+                vad_service.cleanup_converted_files(temp_file_path)
+            except Exception as e:
+                logger.warning(f"Failed to cleanup VAD converted files: {str(e)}")
 
 
 @router.post("/transcribe/url", response_model=TranscriptionResponse)

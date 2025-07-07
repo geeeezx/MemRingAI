@@ -85,7 +85,8 @@ class OpenAIService:
                     ".mpga": "audio/mpeg",
                     ".m4a": "audio/mp4",
                     ".wav": "audio/wav",
-                    ".webm": "audio/webm"
+                    ".webm": "audio/webm",
+                    ".opus": "audio/opus"
                 }
                 mime_type = mime_type_map.get(file_ext, "audio/mpeg")
                 
