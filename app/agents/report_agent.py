@@ -3,7 +3,7 @@ import os
 from typing import Dict, Any, Optional
 from pydantic import BaseModel
 import json
-from ..config import get_settings
+from app.config import get_settings
 
 
 class IdeaReport(BaseModel):

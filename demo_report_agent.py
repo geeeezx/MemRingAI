@@ -8,12 +8,11 @@ import asyncio
 import os
 import sys
 import json
-from typing import List
 
 # Add the app directory to the path
 sys.path.append(os.path.join(os.path.dirname(__file__), 'app'))
 
-from app.services.report_agent import ReportAgentService
+from app.agents.report_agent import ReportAgentService
 
 
 def print_header(title: str):

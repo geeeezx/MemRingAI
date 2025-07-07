@@ -69,7 +69,7 @@ python tests/test_report_agent.py
 ### Single Idea Analysis
 
 ```python
-from app.services.report_agent import ReportAgentService
+from app.agents.report_agent import ReportAgentService
 
 # Initialize the service
 service = ReportAgentService()

@@ -1,13 +1,13 @@
 import asyncio
 import csv
 import os
-from typing import List, Dict, Any
+from typing import List
 
 # Add the app directory to the path
 import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
-from app.services.report_agent import ReportAgentService, IdeaReport
+from app.agents.report_agent import ReportAgentService, IdeaReport
 
 
 class TestReportAgent:
