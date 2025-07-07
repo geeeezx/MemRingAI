@@ -12,7 +12,10 @@ from app.models import (
     TranscriptionRequest,
     TranscriptionResponse,
     ErrorResponse,
-    HealthResponse
+    HealthResponse,
+    TranscriptionReportRequest,
+    TranscriptionReportResponse,
+    IdeaReport
 )
 from app.services.ASR import get_asr_service, ASRProvider
 from app.services.file_service import FileService
@@ -132,7 +135,8 @@ async def transcribe_audio(
             language=language,
             prompt=prompt,
             response_format=response_format,
-            temperature=temperature
+            temperature=temperature,
+            timestamp_granularities=["word", "segment"]
         )
         request_time = time.time() - step_start
         timing_info['request_preparation'] = request_time
@@ -241,9 +245,8 @@ async def transcribe_from_url(
     temp_file_path = None
     
     try:
-        import httpx
-        
         from pathlib import Path
+        import httpx
         
         # Download file from URL
         async with httpx.AsyncClient() as client:
@@ -262,7 +265,8 @@ async def transcribe_from_url(
             language=language,
             prompt=prompt,
             response_format=response_format,
-            temperature=temperature
+            temperature=temperature,
+            timestamp_granularities=["word", "segment"]
         )
         
         # Get ASR service based on provider
@@ -353,4 +357,148 @@ async def get_available_providers() -> dict:
     return {
         "providers": provider_info,
         "default": "auto"
-    } 
+    }
+
+
+@router.post("/transcribe-and-report", response_model=TranscriptionReportResponse)
+async def transcribe_and_generate_report(
+    file: UploadFile = File(..., description="Audio file to transcribe and analyze"),
+    model: Optional[str] = Form("whisper-1", description="Model to use"),
+    language: Optional[str] = Form(None, description="Language code (e.g., 'en', 'es')"),
+    prompt: Optional[str] = Form(None, description="Optional prompt to guide transcription"),
+    response_format: Optional[str] = Form("verbose_json", description="Response format"),
+    temperature: Optional[float] = Form(0.0, description="Temperature for sampling"),
+    provider: Optional[str] = Form("auto", description="ASR provider (openai, volcengine, auto)"),
+    generate_report: bool = Form(True, description="Whether to generate a business report from transcription"),
+    report_focus: Optional[str] = Form(None, description="Optional focus area for the report"),
+    asr_service = Depends(get_asr_service_dependency),
+    file_service: FileService = Depends(get_file_service)
+) -> TranscriptionReportResponse:
+    """
+    Transcribe an uploaded audio file and generate a comprehensive business report from the transcription.
+    
+    This endpoint combines transcription and report generation into a single workflow:
+    1. Transcribe the audio file using ASR
+    2. Generate a comprehensive business report from the transcribed text
+    
+    Args:
+        file: Audio file to transcribe and analyze
+        model: Model to use for transcription
+        language: Language code for transcription
+        prompt: Optional prompt to guide transcription
+        response_format: Response format (verbose_json, json, text, srt, vtt)
+        temperature: Temperature for sampling (0.0 to 1.0)
+        provider: ASR provider to use (openai, volcengine, auto)
+        generate_report: Whether to generate a business report from transcription
+        report_focus: Optional focus area for the report
+        asr_service: ASR service instance
+        file_service: File service instance
+        
+    Returns:
+        TranscriptionReportResponse with both transcription and report results
+        
+    Raises:
+        HTTPException: If transcription or report generation fails
+    """
+    import time
+    start_time = time.time()
+    temp_file_path = None
+    
+    try:
+        # Step 1: Transcribe the audio file
+        logger.info(f"Starting transcription for file: {file.filename} using {provider}")
+        
+        # Validate and save uploaded file
+        temp_file_path = await file_service.save_uploaded_file(file)
+        
+        # Create transcription request
+        transcription_request = TranscriptionRequest(
+            model=model,
+            language=language,
+            prompt=prompt,
+            response_format=response_format,
+            temperature=temperature,
+            timestamp_granularities=["word", "segment"]
+        )
+        
+        # Get ASR service based on provider
+        if provider != "auto":
+            try:
+                asr_provider = ASRProvider(provider)
+                asr_service = get_asr_service(asr_provider)
+            except ValueError:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid ASR provider: {provider}"
+                )
+        
+        # Perform transcription
+        transcription_result = await asr_service.transcribe_audio(temp_file_path, transcription_request)
+        logger.info(f"Transcription completed successfully for file: {file.filename}")
+        
+        # Initialize response variables
+        report_result = None
+        report_success = False
+        report_error = None
+        total_tokens = 0
+        
+        # Step 2: Generate report from transcription (if requested)
+        if generate_report and transcription_result.text.strip():
+            try:
+                logger.info("Starting report generation from transcribed text")
+                
+                # Import report service
+                from app.agents.report_agent import ReportAgentService
+                report_service = ReportAgentService()
+                
+                # Prepare the idea text with optional focus
+                idea_text = transcription_result.text.strip()
+                if report_focus:
+                    idea_text = f"Focus on {report_focus}: {idea_text}"
+                
+                # Generate report
+                report_response = await report_service.generate_report(idea_text)
+                
+                if report_response["success"]:
+                    report_result = IdeaReport(**report_response["report"])
+                    report_success = True
+                    total_tokens = report_response.get("tokens_used", 0)
+                    logger.info("Report generation completed successfully")
+                else:
+                    report_error = report_response.get("error", "Unknown error in report generation")
+                    logger.error(f"Report generation failed: {report_error}")
+                    
+            except Exception as e:
+                report_error = f"Report generation failed: {str(e)}"
+                logger.error(report_error)
+        
+        # Calculate processing time
+        processing_time = time.time() - start_time
+        
+        # Create combined response
+        response = TranscriptionReportResponse(
+            transcription=transcription_result,
+            report=report_result,
+            report_generation_success=report_success,
+            report_error=report_error,
+            total_tokens_used=total_tokens,
+            processing_time_seconds=processing_time,
+            status="success",
+            message=f"Successfully processed audio file{' and generated report' if report_success else ''}"
+        )
+        
+        return response
+        
+    except HTTPException:
+        # Re-raise HTTP exceptions as they're already properly formatted
+        raise
+    except Exception as e:
+        logger.error(f"Combined transcription and report generation failed: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Combined processing failed: {str(e)}"
+        )
+    finally:
+        # Clean up temporary file
+        if temp_file_path:
+            await file_service.cleanup_temp_file(temp_file_path) 
