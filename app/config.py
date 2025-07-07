@@ -27,17 +27,23 @@ class Settings(BaseSettings):
     # File Upload Configuration
     max_file_size: int = Field(25 * 1024 * 1024, env="MAX_FILE_SIZE")  # 25MB default
     allowed_audio_extensions: list[str] = Field(
-        [".mp3", ".mp4", ".mpeg", ".mpga", ".m4a", ".wav", ".webm"],
+        [".mp3", ".mp4", ".mpeg", ".mpga", ".m4a", ".wav", ".webm", ".opus"],
         env="ALLOWED_AUDIO_EXTENSIONS"
     )
     
     # Whisper Configuration
-    default_model: str = Field("whisper-1", env="DEFAULT_WHISPER_MODEL")
+    default_model: str = Field("gpt-4o-transcribe", env="DEFAULT_WHISPER_MODEL")
     default_language: Optional[str] = Field(None, env="DEFAULT_LANGUAGE")
-    default_response_format: str = Field("verbose_json", env="DEFAULT_RESPONSE_FORMAT")
+    default_response_format: str = Field("json", env="DEFAULT_RESPONSE_FORMAT")
     
     # Temporary file storage
     temp_dir: str = Field("./temp", env="TEMP_DIR")
+    
+    # Audio Acceleration Configuration
+    enable_audio_acceleration: bool = Field(True, env="ENABLE_AUDIO_ACCELERATION")
+    audio_acceleration_factor: float = Field(1.5, env="AUDIO_ACCELERATION_FACTOR")
+    audio_min_segment_duration_for_acceleration: float = Field(1.0, env="AUDIO_MIN_SEGMENT_DURATION_FOR_ACCELERATION")
+    audio_max_acceleration_factor: float = Field(3.0, env="AUDIO_MAX_ACCELERATION_FACTOR")
     
     class Config:
         env_file = ".env"

@@ -43,6 +43,8 @@ class TranscriptionResponse(BaseModel):
     text: str
     status: str = "success"
     message: Optional[str] = None
+    vad_info: Optional[dict] = None
+    timing_info: Optional[dict] = None
 
 
 class ErrorResponse(BaseModel):

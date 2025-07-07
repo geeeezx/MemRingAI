@@ -5,10 +5,13 @@ A fast, async FastAPI service for audio transcription using OpenAI's Whisper API
 ## Features
 
 - 🚀 **Fast & Async**: Built with FastAPI for high-performance async processing
-- 🎵 **Multiple Formats**: Supports MP3, MP4, MPEG, MPGA, M4A, WAV, WebM
+- 🎵 **Multiple Formats**: Supports MP3, MP4, MPEG, MPGA, M4A, WAV, WebM, OPUS
 - 🌐 **URL Support**: Transcribe audio files from URLs
 - 🤖 **Multiple ASR Providers**: Support for OpenAI Whisper and Volcengine (DouBao) ASR
 - 🔄 **Provider Switching**: Seamlessly switch between different ASR providers
+- 🎤 **Voice Activity Detection**: Pre-processing with Silero VAD for better transcription quality
+- ⚡ **Audio Acceleration**: Optional audio speed-up for VAD segments to reduce processing time
+- 🔄 **Format Conversion**: Automatic OPUS to WAV conversion for compatibility
 - 📊 **Detailed Output**: Get timestamps, segments, and confidence scores
 - 🔧 **Configurable**: Customizable model, language, and response formats
 - 🛡️ **Secure**: File validation, size limits, and proper error handling
@@ -41,7 +44,12 @@ A fast, async FastAPI service for audio transcription using OpenAI's Whisper API
    # Edit .env and add your OpenAI API key
    ```
 
-4. **Run the service**
+4. **Download VAD model (optional)**
+   ```bash
+   python download_vad_model.py
+   ```
+
+5. **Run the service**
    ```bash
    uv run python -m app.main
    ```
@@ -67,6 +75,10 @@ prompt: "Optional context prompt" (optional)
 response_format: verbose_json (optional)
 temperature: 0.0 (optional)
 provider: auto (optional) - ASR provider (openai, volcengine, auto)
+enable_vad: true (optional) - Enable Voice Activity Detection
+enable_acceleration: false (optional) - Enable audio acceleration for VAD segments
+acceleration_factor: 1.5 (optional) - Audio acceleration factor (1.0-3.0)
+min_segment_duration: 1.0 (optional) - Minimum segment duration for acceleration (seconds)
 ```
 
 ### Transcribe from URL
@@ -161,11 +173,66 @@ print(result['text'])
 | `PORT` | Server port | `8000` |
 | `DEBUG` | Debug mode | `false` |
 | `MAX_FILE_SIZE` | Max file size in bytes | `26214400` (25MB) |
-| `ALLOWED_AUDIO_EXTENSIONS` | Allowed file extensions | `[".mp3", ".mp4", ".mpeg", ".mpga", ".m4a", ".wav", ".webm"]` |
+| `ALLOWED_AUDIO_EXTENSIONS` | Allowed file extensions | `[".mp3", ".mp4", ".mpeg", ".mpga", ".m4a", ".wav", ".webm", ".opus"]` |
 | `DEFAULT_WHISPER_MODEL` | Default Whisper model | `whisper-1` |
 | `DEFAULT_LANGUAGE` | Default language | None |
 | `DEFAULT_RESPONSE_FORMAT` | Default response format | `verbose_json` |
 | `TEMP_DIR` | Temporary file directory | `./temp` |
+
+### Voice Activity Detection (VAD)
+
+The service includes Voice Activity Detection using the Silero VAD model to improve transcription quality:
+
+- **Automatic Format Conversion**: OPUS files are automatically converted to WAV format
+- **Speech Segmentation**: Detects speech segments and removes silence
+- **Configurable Parameters**: Adjustable threshold, minimum speech duration, and silence duration
+- **Optional Feature**: Can be enabled/disabled via the `enable_vad` parameter
+
+**VAD Response Information:**
+```json
+{
+  "vad_info": {
+    "segment_count": 5,
+    "speech_ratio": 0.75,
+    "total_speech_duration": 45.2,
+    "speech_segments": [
+      {"start": 0.0, "end": 10.5, "confidence": 1.0, "accelerated": true},
+      {"start": 15.2, "end": 25.8, "confidence": 1.0, "accelerated": false}
+    ],
+    "acceleration_info": {
+      "applied": true,
+      "original_duration": 60.0,
+      "accelerated_duration": 40.0,
+      "factor": 1.5
+    }
+  }
+}
+```
+
+### Audio Acceleration
+
+The service supports optional audio acceleration for VAD segments to reduce processing time:
+
+- **Selective Acceleration**: Only segments longer than a minimum duration are accelerated
+- **Configurable Speed**: Adjustable acceleration factor from 1.0x to 3.0x
+- **Quality Preservation**: Short segments keep original speed to maintain quality
+- **Time Savings**: Can reduce audio duration by 20-50% depending on settings
+
+**Acceleration Parameters:**
+- `enable_acceleration`: Enable/disable audio acceleration (default: false)
+- `acceleration_factor`: Speed multiplier (1.0 = normal, 2.0 = 2x speed, default: 1.5)
+- `min_segment_duration`: Minimum segment duration for acceleration in seconds (default: 1.0)
+
+**Example Usage:**
+```bash
+curl -X POST "http://localhost:8000/api/v1/transcribe" \
+  -H "Content-Type: multipart/form-data" \
+  -F "file=@audio.mp3" \
+  -F "enable_vad=true" \
+  -F "enable_acceleration=true" \
+  -F "acceleration_factor=1.8" \
+  -F "min_segment_duration=1.5"
+```
 
 ### Response Formats
 
@@ -186,7 +253,14 @@ uv run python -m app.main
 ### Running Tests
 
 ```bash
+# Run all tests
 uv run pytest
+
+# Test transcription with different models
+python tests/test_simple.py tests/audio_test/ref_lbw.WAV gpt-4o-transcribe
+
+# Test VAD functionality
+python tests/test_vad.py tests/audio_test/ref_lbw.WAV true zh
 ```
 
 ### Code Formatting
