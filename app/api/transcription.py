@@ -194,16 +194,16 @@ async def transcribe_audio(
             detail=f"Transcription failed: {str(e)}"
         )
     finally:
+        # Clean up converted VAD files if they exist
+        if vad_result and vad_result.get('converted'):
+            try:
+                vad_service.cleanup_converted_files(vad_result)
+            except Exception as e:
+                logger.warning(f"Failed to cleanup VAD converted files: {str(e)}")
         # Clean up temporary files
         if temp_file_path:
             await file_service.cleanup_temp_file(temp_file_path)
         
-        # Clean up converted VAD files if they exist
-        if vad_result and vad_result.get('converted'):
-            try:
-                vad_service.cleanup_converted_files(temp_file_path)
-            except Exception as e:
-                logger.warning(f"Failed to cleanup VAD converted files: {str(e)}")
 
 
 @router.post("/transcribe/url", response_model=TranscriptionResponse)

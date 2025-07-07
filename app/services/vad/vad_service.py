@@ -10,7 +10,7 @@ import numpy as np
 import wave
 import struct
 
-import onnxruntime as onnx
+import torch
 from pydub import AudioSegment
 import librosa
 
@@ -22,21 +22,12 @@ logger = logging.getLogger(__name__)
 class VADService:
     """Voice Activity Detection service using Silero VAD model."""
     
-    def __init__(self, model_path: str = 'model/silero_vad.onnx'):
+    def __init__(self):
         """
-        Initialize VAD service.
-        
-        Args:
-            model_path: Path to the Silero VAD ONNX model
+        Initialize VAD service with PyTorch Silero VAD.
         """
-        # Convert relative path to absolute path based on current file location
-        if not os.path.isabs(model_path):
-            current_dir = os.path.dirname(os.path.abspath(__file__))
-            self.model_path = os.path.join(current_dir, model_path)
-        else:
-            self.model_path = model_path
-            
-        self.vad_session = None
+        self.vad_model = None
+        self.silero_get_speech_timestamps = None
         self._load_model()
         
         # VAD parameters
@@ -56,32 +47,28 @@ class VADService:
         self.max_acceleration_factor = settings.audio_max_acceleration_factor
         
     def _load_model(self):
-        """Load the Silero VAD model."""
+        """Load the Silero VAD model using PyTorch."""
         try:
-            logger.info(f"Attempting to load VAD model from: {self.model_path}")
-            logger.info(f"Current working directory: {os.getcwd()}")
-            logger.info(f"File exists: {os.path.exists(self.model_path)}")
+            logger.info("Loading Silero VAD model using PyTorch...")
             
-            if os.path.exists(self.model_path):
-                self.vad_session = onnx.InferenceSession(self.model_path)
-                logger.info(f"VAD model loaded successfully from {self.model_path}")
-            else:
-                logger.warning(f"VAD model not found at {self.model_path}, VAD will be disabled")
-                # Try to find the model file in common locations
-                current_dir = os.path.dirname(os.path.abspath(__file__))
-                possible_paths = [
-                    os.path.join(current_dir, "model", "silero_vad.onnx"),
-                    os.path.join(current_dir, "..", "model", "silero_vad.onnx"),
-                    os.path.join(current_dir, "..", "..", "model", "silero_vad.onnx"),
-                ]
-                for path in possible_paths:
-                    if os.path.exists(path):
-                        logger.info(f"Found model at alternative location: {path}")
-                        break
-                self.vad_session = None
+            # Load pre-trained Silero VAD model
+            self.vad_model, utils = torch.hub.load(
+                repo_or_dir='snakers4/silero-vad',
+                model='silero_vad',
+                force_reload=False,
+                onnx=False
+            )
+            
+            # Extract utility functions
+            (self.silero_get_speech_timestamps, _, _, _, _) = utils
+            
+            logger.info("Silero VAD model loaded successfully using PyTorch")
+            
         except Exception as e:
-            logger.error(f"Failed to load VAD model: {str(e)}")
-            self.vad_session = None
+            logger.error(f"Failed to load Silero VAD model: {str(e)}")
+            logger.warning("VAD will be disabled")
+            self.vad_model = None
+            self.silero_get_speech_timestamps = None
     
     def convert_opus_to_wav(self, input_path: str, output_path: Optional[str] = None) -> str:
         """
@@ -110,44 +97,32 @@ class VADService:
             except ImportError:
                 logger.warning("Could not check for FFmpeg availability")
             
-            # Load OPUS file and convert to WAV
+            # Use ffmpeg directly for OPUS conversion (more reliable than pydub)
             try:
-                audio = AudioSegment.from_file(input_path, format="opus")
-                audio.export(output_path, format="wav")
+                import subprocess
                 
-                logger.info(f"Converted OPUS to WAV: {input_path} -> {output_path}")
-                return str(output_path)
+                cmd = [
+                    "ffmpeg", "-i", input_path, 
+                    "-acodec", "pcm_s16le", 
+                    "-ar", "16000", 
+                    "-ac", "1", 
+                    str(output_path), 
+                    "-y"
+                ]
                 
-            except Exception as conversion_error:
-                logger.error(f"OPUS conversion failed: {str(conversion_error)}")
+                result = subprocess.run(cmd, capture_output=True, text=True)
                 
-                # Try alternative approach using ffmpeg directly
-                try:
-                    import subprocess
-                    logger.info("Attempting alternative conversion method...")
+                if result.returncode == 0:
+                    logger.info(f"Converted OPUS to WAV: {input_path} -> {output_path}")
+                    return str(output_path)
+                else:
+                    logger.error(f"FFmpeg conversion failed: {result.stderr}")
+                    raise Exception(f"FFmpeg conversion failed: {result.stderr}")
                     
-                    cmd = [
-                        "ffmpeg", "-i", input_path, 
-                        "-acodec", "pcm_s16le", 
-                        "-ar", "16000", 
-                        "-ac", "1", 
-                        str(output_path), 
-                        "-y"
-                    ]
-                    
-                    result = subprocess.run(cmd, capture_output=True, text=True)
-                    
-                    if result.returncode == 0:
-                        logger.info(f"Alternative conversion successful: {input_path} -> {output_path}")
-                        return str(output_path)
-                    else:
-                        logger.error(f"Alternative conversion failed: {result.stderr}")
-                        raise Exception(f"FFmpeg conversion failed: {result.stderr}")
-                        
-                except FileNotFoundError:
-                    raise Exception("FFmpeg not found. Please install FFmpeg to convert OPUS files.")
-                except Exception as alt_error:
-                    raise Exception(f"All conversion methods failed. Original error: {conversion_error}, Alternative error: {alt_error}")
+            except FileNotFoundError:
+                raise Exception("FFmpeg not found. Please install FFmpeg to convert OPUS files.")
+            except Exception as e:
+                raise Exception(f"OPUS conversion failed: {str(e)}")
             
         except Exception as e:
             logger.error(f"Failed to convert OPUS to WAV: {str(e)}")
@@ -242,7 +217,7 @@ class VADService:
         Returns:
             List of speech segments with start and end timestamps
         """
-        if self.vad_session is None:
+        if self.vad_model is None or self.silero_get_speech_timestamps is None:
             logger.warning("VAD model not loaded, returning full audio as speech")
             return [{
                 'start': 0.0,
@@ -254,11 +229,15 @@ class VADService:
             # Prepare audio for VAD
             audio_length = len(audio_data)
             
-            # Get speech timestamps
-            speech_timestamps = self._get_speech_timestamps_silero(
-                audio_data, 
-                sample_rate,
+            # Convert numpy array to torch tensor
+            audio_tensor = torch.from_numpy(audio_data).float()
+            
+            # Get speech timestamps using Silero VAD utility function
+            speech_timestamps = self.silero_get_speech_timestamps(
+                audio_tensor,
+                model=self.vad_model,
                 threshold=self.threshold,
+                sampling_rate=sample_rate,
                 min_speech_duration_ms=self.min_speech_duration_ms,
                 max_speech_duration_s=self.max_speech_duration_s,
                 min_silence_duration_ms=self.min_silence_duration_ms,
@@ -266,10 +245,17 @@ class VADService:
                 speech_pad_ms=self.speech_pad_ms
             )
             
+            # Convert from Silero format to sample-based tuples
+            speech_segments_samples = []
+            for segment in speech_timestamps:
+                start_sample = int(segment['start'] * sample_rate)
+                end_sample = int(segment['end'] * sample_rate)
+                speech_segments_samples.append((start_sample, end_sample))
+            
             # Apply acceleration if enabled
             if self.enable_acceleration:
                 acceleration_result = self._merge_segments_with_acceleration(
-                    speech_timestamps, audio_data, sample_rate
+                    speech_segments_samples, audio_data, sample_rate
                 )
                 
                 # Convert to list of dictionaries with acceleration info
@@ -295,7 +281,7 @@ class VADService:
             else:
                 # Convert to list of dictionaries without acceleration
                 speech_segments = []
-                for start_sample, end_sample in speech_timestamps:
+                for start_sample, end_sample in speech_segments_samples:
                     start_time = start_sample / sample_rate
                     end_time = end_sample / sample_rate
                     speech_segments.append({
@@ -318,153 +304,7 @@ class VADService:
                 'accelerated': False
             }]
     
-    def _get_speech_timestamps_silero(
-        self,
-        audio: np.ndarray,
-        sampling_rate: int,
-        threshold: float = 0.5,
-        min_speech_duration_ms: int = 250,
-        max_speech_duration_s: float = float('inf'),
-        min_silence_duration_ms: int = 100,
-        window_size_samples: int = 1024,
-        speech_pad_ms: int = 400
-    ) -> List[Tuple[int, int]]:
-        """
-        Get speech timestamps using Silero VAD model.
-        
-        Args:
-            audio: Audio data
-            sampling_rate: Sample rate
-            threshold: VAD threshold
-            min_speech_duration_ms: Minimum speech duration in milliseconds
-            max_speech_duration_s: Maximum speech duration in seconds
-            min_silence_duration_ms: Minimum silence duration in milliseconds
-            window_size_samples: Window size for VAD
-            speech_pad_ms: Speech padding in milliseconds
-            
-        Returns:
-            List of (start_sample, end_sample) tuples
-        """
-        try:
-            if self.vad_session is None:
-                return [(0, len(audio))]
-            
-            # Convert parameters to samples
-            min_speech_samples = int(min_speech_duration_ms * sampling_rate / 1000)
-            
-            # Handle infinity case for max_speech_duration_s
-            if max_speech_duration_s == float('inf'):
-                max_speech_samples = float('inf')
-            else:
-                max_speech_samples = int(max_speech_duration_s * sampling_rate)
-                
-            min_silence_samples = int(min_silence_duration_ms * sampling_rate / 1000)
-            speech_pad_samples = int(speech_pad_ms * sampling_rate / 1000)
-            
-            # Get VAD predictions
-            vad_output = self._get_vad_predictions(audio, sampling_rate, window_size_samples)
-            
-            # Apply threshold
-            speech_mask = vad_output > threshold
-            
-            # Find speech segments
-            speech_segments = []
-            start_sample = None
-            
-            for i, is_speech in enumerate(speech_mask):
-                if is_speech and start_sample is None:
-                    start_sample = i * window_size_samples
-                elif not is_speech and start_sample is not None:
-                    end_sample = i * window_size_samples
-                    
-                    # Apply minimum speech duration
-                    if end_sample - start_sample >= min_speech_samples:
-                        # Apply maximum speech duration
-                        if max_speech_samples == float('inf') or end_sample - start_sample <= max_speech_samples:
-                            speech_segments.append((start_sample, end_sample))
-                        else:
-                            # Split long segments
-                            current_start = start_sample
-                            while current_start < end_sample:
-                                if max_speech_samples == float('inf'):
-                                    current_end = end_sample
-                                else:
-                                    current_end = min(current_start + max_speech_samples, end_sample)
-                                speech_segments.append((current_start, current_end))
-                                current_start = current_end
-                    
-                    start_sample = None
-            
-            # Handle last segment
-            if start_sample is not None:
-                end_sample = len(audio)
-                if end_sample - start_sample >= min_speech_samples:
-                    if max_speech_samples == float('inf') or end_sample - start_sample <= max_speech_samples:
-                        speech_segments.append((start_sample, end_sample))
-                    else:
-                        current_start = start_sample
-                        while current_start < end_sample:
-                            if max_speech_samples == float('inf'):
-                                current_end = end_sample
-                            else:
-                                current_end = min(current_start + max_speech_samples, end_sample)
-                            speech_segments.append((current_start, current_end))
-                            current_start = current_end
-            
-            # Apply speech padding
-            padded_segments = []
-            for start, end in speech_segments:
-                padded_start = max(0, start - speech_pad_samples)
-                padded_end = min(len(audio), end + speech_pad_samples)
-                padded_segments.append((padded_start, padded_end))
-            
-            # Merge overlapping segments
-            merged_segments = self._merge_overlapping_segments(padded_segments)
-            
-            return merged_segments
-            
-        except Exception as e:
-            logger.error(f"Error in VAD processing: {str(e)}")
-            # Return full audio as fallback
-            return [(0, len(audio))]
-    
-    def _get_vad_predictions(self, audio: np.ndarray, sampling_rate: int, window_size: int) -> np.ndarray:
-        """
-        Get VAD predictions from Silero model.
-        
-        Args:
-            audio: Audio data
-            sampling_rate: Sample rate
-            window_size: Window size for processing
-            
-        Returns:
-            VAD predictions array
-        """
-        if self.vad_session is None:
-            return np.ones(len(audio) // window_size)
-        
-        # Prepare input for model
-        input_name = self.vad_session.get_inputs()[0].name
-        output_name = self.vad_session.get_outputs()[0].name
-        
-        # Process audio in windows
-        predictions = []
-        for i in range(0, len(audio) - window_size + 1, window_size):
-            window = audio[i:i + window_size]
-            
-            # Normalize audio
-            window = window.astype(np.float32)
-            if np.max(np.abs(window)) > 0:
-                window = window / np.max(np.abs(window))
-            
-            # Reshape for model input
-            window = window.reshape(1, -1)
-            
-            # Get prediction
-            prediction = self.vad_session.run([output_name], {input_name: window})[0]
-            predictions.append(prediction[0][0])
-        
-        return np.array(predictions)
+
     
     def _merge_overlapping_segments(self, segments: List[Tuple[int, int]]) -> List[Tuple[int, int]]:
         """
@@ -756,7 +596,7 @@ class VADService:
             except Exception as e:
                 logger.warning(f"Failed to cleanup file {file_path}: {str(e)}")
     
-    def cleanup_converted_files(self, input_path: str):
+    def cleanup_converted_files(self, vad_result: dict):
         """
         Clean up converted WAV files created during processing.
         
@@ -764,12 +604,16 @@ class VADService:
             input_path: Original input file path
         """
         try:
-            input_path = Path(input_path)
-            converted_file = input_path.parent / f"converted_{input_path.stem}.wav"
+            input_file = Path(vad_result["input_file"])
+            converted_file = Path(vad_result["wav_file"])
             
             if converted_file.exists():
                 converted_file.unlink()
                 logger.info(f"Cleaned up converted file: {converted_file}")
+            
+            if input_file.exists():
+                input_file.unlink()
+                logger.info(f"Cleaned up input file: {input_file}")
         except Exception as e:
             logger.warning(f"Failed to cleanup converted file: {str(e)}")
 
