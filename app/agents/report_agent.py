@@ -1,9 +1,12 @@
 import asyncio
 import os
+import logging
 from typing import Dict, Any, Optional
 from pydantic import BaseModel
 import json
 from app.config import get_settings
+
+logger = logging.getLogger(__name__)
 
 
 class IdeaReport(BaseModel):
@@ -48,7 +51,7 @@ class ReportAgentService:
             # Create the system prompt for comprehensive analysis
             system_prompt = """You are a comprehensive business analyst and report generator. Your job is to create detailed, structured reports from user ideas.
 
-When given an idea, you should analyze it thoroughly and provide a JSON response with the following structure:
+When given an idea, you should analyze it thoroughly and provide ONLY a valid JSON response with the following exact structure:
 {
     "idea_summary": "Clear summary of the core concept",
     "market_analysis": "Market potential, target audience, and competitive landscape analysis",
@@ -60,7 +63,7 @@ When given an idea, you should analyze it thoroughly and provide a JSON response
     "next_actions": ["Action 1", "Action 2", "..."]
 }
 
-Your reports should be professional, actionable, and comprehensive. Focus on practical insights and realistic assessments."""
+CRITICAL: Return ONLY the JSON object. Do not include any additional text, explanations, or formatting outside the JSON."""
 
             user_prompt = f"""
 Please analyze this content: "{idea}"
@@ -79,7 +82,7 @@ Generate a detailed report that includes:
 
 Even if the input seems unrelated to business (gaming, personal comments, etc.), find creative ways to analyze it from a business perspective (e.g., gaming content -> gaming platform business, personal statements -> social media platform, etc.).
 
-Provide the response in the exact JSON format specified in the system prompt.
+Respond with ONLY the JSON object in the exact format specified. No additional text.
 """
 
             # Make the API call
@@ -96,20 +99,40 @@ Provide the response in the exact JSON format specified in the system prompt.
             # Parse the response
             response_text = response.choices[0].message.content
             
-            # Try to parse as JSON
-            try:
-                report_data = json.loads(response_text)
-                # Validate with Pydantic model
-                validated_report = IdeaReport(**report_data)
-                
+            # Check if response is valid
+            if not response_text:
                 return {
-                    "success": True,
-                    "report": validated_report.model_dump(),
-                    "raw_output": response_text,
-                    "tokens_used": response.usage.total_tokens if response.usage else 0
+                    "success": False,
+                    "error": "Empty response from OpenAI",
+                    "raw_output": "",
+                    "report": None
                 }
-            except json.JSONDecodeError:
-                # If JSON parsing fails, return raw text
+            
+            # Try to parse as JSON with improved error handling
+            logger.debug(f"Raw OpenAI response: {response_text[:500]}...")
+            report_data = self._parse_json_response(response_text)
+            
+            if report_data:
+                logger.info("Successfully parsed JSON response")
+                try:
+                    # Validate with Pydantic model
+                    validated_report = IdeaReport(**report_data)
+                    
+                    return {
+                        "success": True,
+                        "report": validated_report.model_dump(),
+                        "raw_output": response_text,
+                        "tokens_used": response.usage.total_tokens if response.usage else 0
+                    }
+                except Exception as validation_error:
+                    return {
+                        "success": False,
+                        "error": f"Report validation failed: {str(validation_error)}",
+                        "raw_output": response_text,
+                        "report": None
+                    }
+            else:
+                logger.error(f"Failed to parse JSON response. Raw response: {response_text}")
                 return {
                     "success": False,
                     "error": "Failed to parse response as JSON",
@@ -124,6 +147,87 @@ Provide the response in the exact JSON format specified in the system prompt.
                 "report": None
             }
     
+    def _parse_json_response(self, response_text: str) -> Optional[Dict[str, Any]]:
+        """
+        Improved JSON parsing with multiple fallback strategies
+        
+        Args:
+            response_text (str): Raw response from OpenAI
+            
+        Returns:
+            Optional[Dict[str, Any]]: Parsed JSON data or None if parsing fails
+        """
+        import re
+        
+        if not response_text:
+            return None
+        
+        # Strategy 1: Direct JSON parsing
+        try:
+            result = json.loads(response_text)
+            logger.debug("JSON parsed successfully with Strategy 1 (direct parsing)")
+            return result
+        except json.JSONDecodeError:
+            logger.debug("Strategy 1 failed, trying Strategy 2")
+        
+        # Strategy 2: Extract JSON from markdown code blocks
+        json_pattern = r'```(?:json)?\s*(\{.*?\})\s*```'
+        match = re.search(json_pattern, response_text, re.DOTALL)
+        if match:
+            try:
+                return json.loads(match.group(1))
+            except json.JSONDecodeError:
+                pass
+        
+        # Strategy 3: Find JSON object in text (look for { ... })
+        json_pattern = r'\{.*\}'
+        match = re.search(json_pattern, response_text, re.DOTALL)
+        if match:
+            try:
+                return json.loads(match.group(0))
+            except json.JSONDecodeError:
+                pass
+        
+        # Strategy 4: Clean and try again
+        cleaned_text = response_text.strip()
+        
+        # Remove common prefixes/suffixes
+        prefixes_to_remove = [
+            "Here's the analysis:",
+            "Here is the analysis:",
+            "Analysis:",
+            "JSON Response:",
+            "Response:",
+        ]
+        
+        for prefix in prefixes_to_remove:
+            if cleaned_text.startswith(prefix):
+                cleaned_text = cleaned_text[len(prefix):].strip()
+        
+        try:
+            return json.loads(cleaned_text)
+        except json.JSONDecodeError:
+            pass
+        
+        # Strategy 5: Try to fix common JSON issues
+        try:
+            # Fix common issues like trailing commas, single quotes, etc.
+            fixed_text = cleaned_text
+            
+            # Replace single quotes with double quotes (common issue)
+            fixed_text = re.sub(r"'([^']*)':", r'"\1":', fixed_text)
+            fixed_text = re.sub(r":\s*'([^']*)'", r': "\1"', fixed_text)
+            
+            # Remove trailing commas before closing brackets
+            fixed_text = re.sub(r',\s*}', '}', fixed_text)
+            fixed_text = re.sub(r',\s*]', ']', fixed_text)
+            
+            return json.loads(fixed_text)
+        except json.JSONDecodeError:
+            pass
+        
+        return None
+
     async def analyze_idea_batch(self, ideas: list[str]) -> Dict[str, Any]:
         """
         Analyze multiple ideas in batch
