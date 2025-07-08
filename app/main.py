@@ -87,10 +87,12 @@ async def root():
         "version": "0.1.0",
         "description": "FastAPI service for transcription using OpenAI Whisper API",
         "endpoints": {
-            "health": "/health",
-            "transcribe": "/transcribe",
-            "transcribe_url": "/transcribe/url",
-            "supported_formats": "/supported-formats",
+            "health": "/api/v1/health",
+            "transcribe": "/api/v1/transcribe",
+            "transcribe_url": "/api/v1/transcribe/url",
+            "transcribe_and_report": "/api/v1/transcribe-and-report",
+            "supported_formats": "/api/v1/supported-formats",
+            "providers": "/api/v1/providers",
             "docs": "/docs"
         }
     }
