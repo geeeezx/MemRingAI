@@ -28,13 +28,37 @@ def print_transcription_results(transcription: dict):
     print(f"🌍 Language: {transcription.get('language', 'N/A')}")
     print(f"⏱️  Duration: {transcription.get('duration', 'N/A')} seconds")
     
+    # Show VAD information if available
+    if transcription.get('vad_info'):
+        vad_info = transcription['vad_info']
+        print(f"\n🎤 VOICE ACTIVITY DETECTION:")
+        print(f"   Speech Ratio: {vad_info.get('speech_ratio', 0):.1%}")
+        print(f"   Speech Duration: {vad_info.get('total_speech_duration', 0):.1f}s")
+        print(f"   Speech Segments: {vad_info.get('segment_count', 0)}")
+        
+        if vad_info.get('acceleration_info'):
+            acc_info = vad_info['acceleration_info']
+            print(f"   Audio Acceleration: {acc_info.get('factor', 1.0):.1f}x speed")
+            print(f"   Time Saved: {acc_info.get('original_duration', 0) - acc_info.get('accelerated_duration', 0):.1f}s")
+    
+    # Show timing information if available
+    if transcription.get('timing_info'):
+        timing = transcription['timing_info']
+        print(f"\n⏱️  PROCESSING TIMING:")
+        print(f"   Total Time: {timing.get('total_time', 0):.2f}s")
+        if timing.get('vad_processing'):
+            print(f"   VAD Processing: {timing['vad_processing']:.2f}s")
+        if timing.get('transcription'):
+            print(f"   Transcription: {timing['transcription']:.2f}s")
+    
     if transcription.get('segments'):
-        print(f"📊 Segments: {len(transcription['segments'])}")
+        print(f"\n📊 TRANSCRIPTION SEGMENTS:")
+        print(f"   Total Segments: {len(transcription['segments'])}")
         # Show first few segments
         for i, segment in enumerate(transcription['segments'][:3]):
-            print(f"  [{segment['start']:.1f}s-{segment['end']:.1f}s] {segment['text']}")
+            print(f"   [{segment['start']:.1f}s-{segment['end']:.1f}s] {segment['text']}")
         if len(transcription['segments']) > 3:
-            print(f"  ... and {len(transcription['segments']) - 3} more segments")
+            print(f"   ... and {len(transcription['segments']) - 3} more segments")
 
 
 def print_report_results(report: dict):
@@ -113,7 +137,8 @@ def transcribe_and_analyze_audio(file_path: str, language="auto", report_focus=N
             
             print(f"📤 Uploading to: {api_url}")
             print(f"🔧 Parameters: language={language}, report_focus={report_focus}")
-            print("⏳ Processing (this may take a while)...")
+            print("🎤 VAD (Voice Activity Detection): ENABLED")
+            print("⏳ Processing with VAD + Transcription + Report Generation...")
             
             # Send request
             start_time = time.time()
@@ -137,7 +162,26 @@ def transcribe_and_analyze_audio(file_path: str, language="auto", report_focus=N
             # Print report results
             if result.get('report_generation_success') and result.get('report'):
                 print_report_results(result['report'])
-                print(f"\n📊 Report tokens used: {result.get('total_tokens_used', 'N/A')}")
+                print(f"\n📊 ANALYSIS METRICS:")
+                print(f"   Report tokens used: {result.get('total_tokens_used', 'N/A')}")
+                print(f"   Server processing time: {result.get('processing_time_seconds', 0):.2f}s")
+                
+                # Show enhanced insights if VAD data was used
+                if result.get('transcription', {}).get('vad_info'):
+                    vad_info = result['transcription']['vad_info']
+                    speech_ratio = vad_info.get('speech_ratio', 0)
+                    print(f"\n🎯 PRESENTATION QUALITY INSIGHTS:")
+                    if speech_ratio > 0.7:
+                        print(f"   ✅ High confidence presentation ({speech_ratio:.0%} speech content)")
+                    elif speech_ratio > 0.4:
+                        print(f"   ⚡ Moderate presentation quality ({speech_ratio:.0%} speech content)")
+                    else:
+                        print(f"   ⚠️  Consider more structured delivery ({speech_ratio:.0%} speech content)")
+                        
+                    if vad_info.get('segment_count', 0) > 5:
+                        print(f"   📈 Well-structured idea ({vad_info['segment_count']} segments)")
+                    else:
+                        print(f"   💬 Concise presentation ({vad_info['segment_count']} segments)")
             elif result.get('report_error'):
                 print(f"\n❌ Report generation failed: {result['report_error']}")
             

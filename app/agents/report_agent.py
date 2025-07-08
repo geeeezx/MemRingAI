@@ -63,10 +63,12 @@ When given an idea, you should analyze it thoroughly and provide a JSON response
 Your reports should be professional, actionable, and comprehensive. Focus on practical insights and realistic assessments."""
 
             user_prompt = f"""
-Please analyze this idea comprehensively: "{idea}"
+Please analyze this content: "{idea}"
+
+IMPORTANT: If this content is not clearly a business idea, startup concept, or entrepreneurial proposal, please respond with a structured analysis that treats it as a potential business opportunity by finding creative business applications or market potential.
 
 Generate a detailed report that includes:
-1. A clear summary of the idea
+1. A clear summary of the core concept
 2. Market analysis and potential (target audience, market size, competition)
 3. Technical feasibility assessment (complexity, required technologies, development challenges)
 4. Step-by-step implementation plan
@@ -74,6 +76,8 @@ Generate a detailed report that includes:
 6. Key success factors and strategies
 7. Realistic timeline estimate
 8. Immediate next actions to take
+
+Even if the input seems unrelated to business (gaming, personal comments, etc.), find creative ways to analyze it from a business perspective (e.g., gaming content -> gaming platform business, personal statements -> social media platform, etc.).
 
 Provide the response in the exact JSON format specified in the system prompt.
 """
